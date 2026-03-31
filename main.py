@@ -1,5 +1,19 @@
 import os
 import sys
+
+print(f"DEBUG: Python -> {sys.executable}")
+
+_base_path = os.path.dirname(os.path.abspath(__file__))
+_lib_path = os.path.join(_base_path, "python", "Lib", "site-packages")
+_py_path = os.path.join(_base_path, "python")
+
+if _lib_path not in sys.path:
+    sys.path.insert(0, _lib_path)
+if _py_path not in sys.path:
+    sys.path.insert(0, _py_path)
+if _base_path not in sys.path:
+    sys.path.insert(0, _base_path)
+
 import time
 import ctypes
 import keyboard
@@ -24,8 +38,9 @@ def isa():
     except: return False
 
 def _dm():
-    _p = " ".join([f'"{a}"' if " " in a else a for a in sys.argv])
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, _p, None, 1)
+    _script = os.path.abspath(sys.argv[0])
+    _params = f'"{_script}"'
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, _params, None, 1)
 
 def _f_gb(_v):
     return f"{_v / (1024**3):.2f} GB"
@@ -145,11 +160,11 @@ def main():
         global _rs
         _lg.log("Hotkey 'R' detected: Resetting...")
         _rs = True
-        time.sleep(2)
+        time.sleep(1)
         _px = sys.executable
-        _sp = sys.argv[0]
-        _lg.log(f"Relaunching: {_px} {_sp}")
-        os.execv(_px, [f'"{_px}"', f'"{_sp}"'] + sys.argv[1:])
+        _script = os.path.abspath(sys.argv[0])
+        # On reconstruit la commande proprement
+        os.execv(_px, [f'"{_px}"', f'"{_script}"'])
 
     keyboard.add_hotkey('q', lambda: (_lg.log("Hotkey 'Q' detected: Exiting"), os._exit(0)))
     keyboard.add_hotkey('l', _o_l)
