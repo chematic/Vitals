@@ -1,23 +1,10 @@
 import os
 import sys
-
-print(f"DEBUG: Python -> {sys.executable}")
-
-_base_path = os.path.dirname(os.path.abspath(__file__))
-_lib_path = os.path.join(_base_path, "python", "Lib", "site-packages")
-_py_path = os.path.join(_base_path, "python")
-
-if _lib_path not in sys.path:
-    sys.path.insert(0, _lib_path)
-if _py_path not in sys.path:
-    sys.path.insert(0, _py_path)
-if _base_path not in sys.path:
-    sys.path.insert(0, _base_path)
-
 import time
 import ctypes
 import keyboard
 import subprocess
+import requests
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
@@ -33,6 +20,17 @@ _c = Console()
 VERSION = "1.2.0-PRO"
 _rs = False
 
+_base_path = os.path.dirname(os.path.abspath(__file__))
+_lib_path = os.path.join(_base_path, "python", "Lib", "site-packages")
+_py_path = os.path.join(_base_path, "python")
+
+if _lib_path not in sys.path:
+    sys.path.insert(0, _lib_path)
+if _py_path not in sys.path:
+    sys.path.insert(0, _py_path)
+if _base_path not in sys.path:
+    sys.path.insert(0, _base_path)
+
 def isa():
     try: return ctypes.windll.shell32.IsUserAnAdmin()
     except: return False
@@ -41,6 +39,28 @@ def _dm():
     _script = os.path.abspath(sys.argv[0])
     _params = f'"{_script}"'
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, _params, None, 1)
+
+def checkupd():
+    repo_url = "https://raw.githubusercontent.com/chematic/Vitals/main/install.ps1"
+    local_script = os.path.join(_base_path, "install.ps1")
+    _c.print("[bold cyan]Checking for system updates...[/bold cyan]")
+    try:
+        local_time = os.path.getmtime(local_script) if os.path.exists(local_script) else 0
+        response = requests.head(repo_url, timeout=5)
+        last_modified = response.headers.get('Last-Modified')
+        if last_modified:
+            remote_time = time.mktime(time.strptime(last_modified, '%a, %d %b %Y %H:%M:%S %Z'))
+            if remote_time > local_time:
+                _c.print(Panel("[bold yellow]UPDATE AVAILABLE[/bold yellow]\nA new version of the Vitals installation script was detected.", border_style="yellow"))
+                if Confirm.ask("Would you like to update Vitals now?", default=True):
+                    _c.print("[bold green]Elevating to PowerShell Admin for update...[/bold green]")
+                    cmd = 'powershell -Command "Start-Process powershell -ArgumentList \'-ExecutionPolicy Bypass -NoProfile -WindowStyle Normal -Command iwr -useb https://raw.githubusercontent.com/chematic/Vitals/main/install.ps1 | iex\' -Verb RunAs"'
+                    subprocess.Popen(cmd, shell=True)
+                    os._exit(0)
+            else:
+                _c.print("[green]System is up to date.[/green]")
+    except Exception as e:
+        _c.print(f"[dim red]Update check failed: {e}[/dim red]")
 
 def _f_gb(_v):
     return f"{_v / (1024**3):.2f} GB"
@@ -53,7 +73,6 @@ def create_dashboard(_d):
             border_style="yellow",
             expand=True
         )
-
     _l = Layout()
     _l.split_column(
         Layout(name="h", size=3),
@@ -61,7 +80,6 @@ def create_dashboard(_d):
         Layout(name="lo", ratio=1),
         Layout(name="f", size=3)
     )
-    
     _c_d = _d['cpu']
     _ct = Table(expand=True, border_style="cyan", box=None, padding=(0,1))
     _ct.add_column("Property", style="bold cyan")
@@ -72,7 +90,6 @@ def create_dashboard(_d):
     _ct.add_row("Frequency", f"{_c_d['freq_current']} MHz")
     _ct.add_row("Power (Watt)", f"{_c_d.get('power', 'N/A')} W")
     _ct.add_row("Voltage", f"{_c_d.get('voltage', 'N/A')} V")
-
     _g_l = _d['gpu']
     _gt = Table(expand=True, border_style="yellow", box=None)
     if _g_l:
@@ -84,17 +101,14 @@ def create_dashboard(_d):
         _gt.add_row("Fan Speed", f"{_g.get('fan_speed', 'N/A')}%")
     else:
         _gt.add_row("Status", "No GPU Detected")
-
     _m_d = _d['memory']
     _st = Table(expand=True, border_style="magenta", box=None)
     _st.add_column("Device", style="bold magenta")
     _st.add_column("Used/Total", justify="right")
     _st.add_column("%", justify="right")
-    
     _st.add_row("Physical RAM", f"{_f_gb(_m_d['ram_used'])} / {_f_gb(_m_d['ram_total'])}", f"{_m_d['ram_pct']}%")
     for _dk in _d['storage']:
         _st.add_row(f"Disk {_dk['device']}", f"{_f_gb(_dk['used'])} / {_f_gb(_dk['total'])}", f"{_dk['pct']}%")
-
     _f_s = _d.get('fans', [])
     _ft = Table(expand=True, border_style="green", box=None)
     _ft.add_column("Sensor", style="bold green")
@@ -104,10 +118,8 @@ def create_dashboard(_d):
             _ft.add_row(_fs['name'], f"{int(_fs['value'])} RPM")
     else:
         _ft.add_row("Fans", "No sensors found")
-
     _up = datetime.fromtimestamp(_d['uptime']).strftime('%Y-%m-%d %H:%M:%S')
     _l["h"].update(Panel(f"[bold white]VITALS DOCKER[/bold white] | Uptime: {_up} | Time: {_d['timestamp']}", border_style="blue"))
-    
     _l["u"].split_row(
         Layout(Panel(_ct, title="[b]PROCESSOR[/b]", border_style="cyan")),
         Layout(Panel(_gt, title="[b]GRAPHICS[/b]", border_style="yellow"))
@@ -116,12 +128,10 @@ def create_dashboard(_d):
         Layout(Panel(_st, title="[b]MEMORY & STORAGE[/b]", border_style="magenta")),
         Layout(Panel(_ft, title="[b]COOLING (FANS)[/b]", border_style="green"))
     )
-
     _l["f"].split_row(Layout(name="f_l"), Layout(name="f_m"), Layout(name="f_r"))
     _l["f_l"].update(Panel("[bold cyan]Q[/bold cyan] Exit | [bold cyan]L[/bold cyan] Log | [bold cyan]R[/bold cyan] Reset", border_style="white"))
     _l["f_m"].update(Panel(f"Health: [bold green]OPTIMAL[/bold green] | Admin: {isa()}", border_style="white"))
     _l["f_r"].update(Panel(f"Vitals Engine v{VERSION} | [bold yellow]AMD-SMU[/bold yellow]", border_style="white"))
-    
     return _l
 
 def main():
@@ -129,11 +139,9 @@ def main():
     _bp = os.path.dirname(os.path.abspath(__file__))
     _ld = os.path.join(_bp, "logs")
     _lg = VitalsLogger(_ld)
-
     _lg.log("-- LOGS --")
     _lg.log(f"Version: {VERSION}")
     _lg.log(f"Admin Status: {isa()}")
-
     if not isa():
         _lg.log("Admin privileges required. Prompting user...")
         if Confirm.ask("[bold yellow]Relaunch as Admin?[/bold yellow]", default=True):
@@ -142,10 +150,11 @@ def main():
             sys.exit(0)
         _lg.log("Elevation refused. Exiting.", "ERROR")
         sys.exit(1)
-
+    
+    checkupd()
+    
     _lg.log("Initializing Engine...")
     _en = VitalsEngine()
-
     def _o_l():
         _lg.log("Hotkey 'L' detected: Opening logs")
         _lf = os.path.join(_ld, "vitals_runtime.log")
@@ -155,7 +164,6 @@ def main():
                 _lg.log(f"Notepad spawned for {_lf}")
             except Exception as _e:
                 _lg.log(f"Failed to open log: {_e}", "ERROR")
-
     def _r_e():
         global _rs
         _lg.log("Hotkey 'R' detected: Resetting...")
@@ -163,14 +171,11 @@ def main():
         time.sleep(1)
         _px = sys.executable
         _script = os.path.abspath(sys.argv[0])
-        # On reconstruit la commande proprement
         os.execv(_px, [f'"{_px}"', f'"{_script}"'])
-
     keyboard.add_hotkey('q', lambda: (_lg.log("Hotkey 'Q' detected: Exiting"), os._exit(0)))
     keyboard.add_hotkey('l', _o_l)
     keyboard.add_hotkey('r', _r_e)
     _lg.log("Hotkeys registered")
-
     _lg.log("Starting Live UI loop")
     try:
         with Live(screen=True, auto_refresh=True, refresh_per_second=2) as _lv:

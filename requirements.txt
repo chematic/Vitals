@@ -3,4 +3,5 @@ rich
 GPUtil
 py-cpuinfo
 keyboard
+requests
 pythonnet==3.0.1
