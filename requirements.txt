@@ -1,0 +1,6 @@
+psutil
+rich
+GPUtil
+py-cpuinfo
+keyboard
+pythonnet==3.0.1
